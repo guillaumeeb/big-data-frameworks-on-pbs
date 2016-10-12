@@ -39,7 +39,9 @@ class Launcher:
     def env_string(env,prop_env_list):
         return " ".join(self.env_list(env,prop_env_list))
 
-
+#
+# Launcher implementation using pbsdsh. Not working on linux3 cluster
+#
 class PBSDSHLauncher(Launcher):
     def launch(self,cmdline,env,propagate_env=False,
                prop_env_list=["SPARK_CONF_DIR","SPARK_LOG_DIR","SPARK_LOCAL_DIRS"]):
@@ -51,12 +53,15 @@ class PBSDSHLauncher(Launcher):
         os.system("pbsdsh -- " + cmd + " &")
         self.sleep()
 
-
+#
+# Ssh launcher. It works, making it the default.
+#
 class SSHLauncher(Launcher):
     def launch(self,cmdline,env,propagate_env=False,
                prop_env_list=["SPARK_CONF_DIR","SPARK_LOG_DIR","SPARK_LOCAL_DIRS"]):
         time.sleep(1)
         if ( "PBS_NODEFILE" in os.environ.keys() ):
+            # Grep all nodes from this pbs submit for starting workers.
             nodefile = open(os.environ["PBS_NODEFILE"])
             for line in nodefile.readlines():
                 argv = cmdline.split()
@@ -74,7 +79,7 @@ class SSHLauncher(Launcher):
                 if ( child_pid==0 ):
                     os.execvpe(argv[0],argv,env)   
             nodefile.close()
-            self.sleep()
+            self.sleep()#Why a sleep is performed?
         else:
             raise EnvironmentError("PBS_NODEFILE undefined")
 
@@ -102,6 +107,7 @@ def propsFromFile(filename):
 
 #
 # documentation
+# TODO: To many options: some of thema re available through env variables too.
 #
 def usage():
     sys.stderr.write("pbs-spark-submit:  Run an Apache Spark \"job\" (including optionally\n\tstarting the Spark master and work services) inside a PBS job.\n")
@@ -112,8 +118,8 @@ def usage():
     sys.stderr.write("\t--help or -h\n\t\tPrint this help message\n")
     sys.stderr.write("\t--init\n\t\tInitialize Spark master/worker services (default).\n")
     sys.stderr.write("\t--no-init\n\t\tDo not initialize Spark master/worker services.\n")
-    sys.stderr.write("\t--pbsdsh\n\t\tUse the pbsdsh process launcher (default).\n")
-    sys.stderr.write("\t--ssh\n\t\tUse the ssh process launcher.\n")
+    sys.stderr.write("\t--pbsdsh\n\t\tUse the pbsdsh process launcher.\n")
+    sys.stderr.write("\t--ssh\n\t\tUse the ssh process launcher (default).\n")
     sys.stderr.write("\t--conf-dir <confdir> or -C <confdir>\n\t\tLook in <confdir> for Java properties files.\n")
     sys.stderr.write("\t--log-dir <logdir> or -L <logdir>\n\t\tPlace logs in <logdir>.\n")
     sys.stderr.write("\t--log4j-properties <propsfile> or -l <propsfile>\n\t\tRead log4j properties from <propsfile>.\n")
@@ -146,7 +152,7 @@ cpulimit = None
 child_args = []
 properties = {}
 pausetime = 5
-launcher = PBSDSHLauncher()
+launcher = SSHLauncher()
 log4j_props = None
 if ( "SPARK_LAUNCHER" in os.environ.keys() ):
     if ( os.environ["SPARK_LAUNCHER"] in ("pbsdsh","PBSDSH") ):
