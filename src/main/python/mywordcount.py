@@ -26,6 +26,7 @@ from pyspark.sql import SparkSession
 if __name__ == "__main__":
     if len(sys.argv) != 3:
         print("Usage: wordcount <file> <outputfile>", file=sys.stderr)
+	print(sys.argv)
         exit(-1)
 
     spark = SparkSession\
@@ -36,7 +37,7 @@ if __name__ == "__main__":
     lines = spark.read.text(sys.argv[1]).rdd.map(lambda r: r[0])
     counts = lines.flatMap(lambda x: x.split(' ')) \
                   .map(lambda x: (x, 1)) \
-                  .reduceByKey(add)
+                  .reduceByKey(add, numPartitions=10)
     
     #Persist rdd result
     counts.saveAsTextFile(sys.argv[2])

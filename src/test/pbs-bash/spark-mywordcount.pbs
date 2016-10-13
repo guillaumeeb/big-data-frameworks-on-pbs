@@ -8,6 +8,7 @@ INPUT=/ptmp/eynardbg/spark-2.0.1-bin-hadoop2.7/conf/
 OUTPUT=MyWordCount_txt
 
 cd $PBS_O_WORKDIR
+rm -rf $OUTPUT
 
 module load jdk/1.8.0_74
-./pbs-spark-submit --cores 5 --memory 20000M mywordcount.py $INPUT $OUTPUT
+./pbs-spark-submit --cores 5 --memory 20000M mywordcount.py "$INPUT" $OUTPUT
