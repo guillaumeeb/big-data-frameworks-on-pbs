@@ -1,0 +1,9 @@
+#!/bin/bash
+#PBS -N spark-start-cluster-module
+#PBS -l select=3:ncpus=5:mem=20000Mb
+#PBS -l walltime=00:20:00
+
+cd $TMPDIR
+
+module load spark/2.0.1
+pbs-spark-launcher --cores 5 --memory 20000M

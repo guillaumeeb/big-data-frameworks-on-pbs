@@ -1,0 +1,23 @@
+#%Module1.0
+set module_name "Spark"
+set machines { Linux }
+set date_installation "29/11/2016"
+set version "2.0.1"
+
+source "$env(MODULELIBPATH)/POLprocs.tcl"
+
+depend python/2.7.12
+depend jdk/1.8.0_74
+
+set spark_home /work/hpc/modules/install/spark-2.0.1-bin-hadoop2.7
+set sparkonpbs_home /work/hpc/modules/install/spark-on-pbs-0.1
+
+setenv SPARK_HOME $spark_home
+prepend-path PATH $spark_home/bin
+prepend-path PATH $sparkonpbs_home
+
+proc POLHelp { } {
+	puts stderr "Error"
+}
+
+Result

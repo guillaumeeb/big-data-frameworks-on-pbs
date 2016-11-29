@@ -1,5 +1,5 @@
 #!/bin/bash
-#PBS -N spark-my-wordcount
+#PBS -N spark-start-cluster
 #PBS -l select=3:ncpus=5:mem=20000Mb
 #PBS -l walltime=00:20:00
 export SPARK_HOME=/ptmp/eynardbg/spark-2.0.1-bin-hadoop2.7
