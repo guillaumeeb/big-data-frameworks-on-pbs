@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python -u
 #
 # pbs-spark-submit:  Run an Apache Spark "job" (including optionally
 #                    starting the Spark services) inside a PBS job.
@@ -50,7 +50,8 @@ class PBSDSHLauncher(Launcher):
         if ( propagate_env ):
             cmd = self.env_string(env,prop_env_list)+" "+cmdline
         #pbsdsh is not functionning on PBS cluster... Don't know why.
-        os.system("pbsdsh -- " + cmd + " &")
+        print(cmd)
+        os.system("pbsdsh -v -- " + cmd + " &\n")
         self.sleep()
 
 #
@@ -151,9 +152,10 @@ memlimit = None
 cpulimit = None
 child_args = []
 properties = {}
-pausetime = 5
-launcher = SSHLauncher()
+pausetime = 3
+launcher = PBSDSHLauncher()
 log4j_props = None
+
 if ( "SPARK_LAUNCHER" in os.environ.keys() ):
     if ( os.environ["SPARK_LAUNCHER"] in ("pbsdsh","PBSDSH") ):
         launcher = PBSDSHLauncher()
@@ -232,11 +234,12 @@ if ( workdir is not None and not os.path.exists(workdir) ):
     os.mkdir(workdir)
 
 
-# **ASSUMPTION**:  master runs on mother superior node
+# **ASSUMPTION**:  master runs on mother superior node, this could change in the future?
 os.environ["SPARK_MASTER_IP"] = platform.node()
 if ( not ( "SPARK_MASTER_PORT" in os.environ.keys() ) ):
     os.environ["SPARK_MASTER_PORT"] = "7077"
-os.environ["SPARK_MASTER"] = "spark://"+os.environ["SPARK_MASTER_IP"]+":"+str(os.environ["SPARK_MASTER_PORT"])
+#Dont put spark_master in environment, this causes problem with Spark trying to rsync it, which is not needed here.
+spark_master = "spark://"+os.environ["SPARK_MASTER_IP"]+":"+str(os.environ["SPARK_MASTER_PORT"])
 #sys.stderr.write("Spark master = "+os.environ["SPARK_MASTER"]+"\n")
 
 if ( init_svcs ):
@@ -249,28 +252,50 @@ if ( init_svcs ):
 
     # launch master on mother superior
     cmdline = os.environ["SPARK_HOME"]+"/sbin/start-master.sh"
+    print("Launching master " + spark_master)
     os.system(cmdline+" &")
     sys.stderr.write(cmdline+"\n")
-    sys.stdout.write("SPARK_MASTER="+os.environ["SPARK_MASTER"]+"\n")
+    #sys.stdout.write("spark_master="+spark_master+"\n")
+    #Here whe should have a test for master started or not.
     time.sleep(pausetime)
 
     # launch workers
-    cmdline = "module load jdk/1.8.0_74; " + os.environ["SPARK_HOME"]+"/sbin/start-slave.sh"
+    #cmdline = os.environ["SPARK_HOME"]+"/sbin/start-slave.sh"
+    #Use spark-class because we do not want to start a service, but have a process that do not finish except in error or when killed
+    # Else pbsdsh will end and stop the service
+    cmdline = os.environ["SPARK_HOME"]+"/bin/spark-class org.apache.spark.deploy.worker.Worker"
     if ( memlimit is not None ):
         cmdline += " --memory "+memlimit
     if ( cpulimit is not None ):
         cmdline += " --cores "+cpulimit
     if ( workdir is not None ):
         cmdline += " --work-dir "+workdir
-    cmdline += " "+os.environ["SPARK_MASTER"]
+    cmdline += " "+spark_master
+    #Overwrite command for now
+    #cmdline = "$PBS_O_WORKDIR/start-slave.sh " + spark_master
     sys.stderr.write(cmdline+"\n")
+    print("launching services with launcher.")
     launcher.launch(cmdline,os.environ)
+    #TODO: here we should wait that the master has all its workers started
+    print("sleeping " + str(pausetime))
     time.sleep(pausetime)
+    print("services must be started")
 
 # run the user's Spark "job", if one is given
 if ( len(child_args)>0 ):
-    cmdline = os.environ["SPARK_HOME"]+"/bin/spark-submit --master "+os.environ["SPARK_MASTER"]
+    print("\nLaunching spark application: " + str(child_args))
+    cmdline = os.environ["SPARK_HOME"]+"/bin/spark-submit --master "+spark_master
     if ( log4j_props is not None ):
         cmdline += " --driver-java-options -Dlog4j.configuration=file:"+log4j_props
     cmdline += " "+" ".join(child_args)
     os.system(cmdline)
+    print("Job end.")
+else:
+    #No job declared, just leave the Spark cluster started to allow connexion from any submitted job.
+    #It will be stopped upon a qdel or when wall time is reached
+    print("Waiting indefinitly until cluster is stopped")
+    while True:
+        print("Spark cluster is still alive with master" + spark_master)
+        time.sleep(60)
+
+print("\nPBS Spark Launcher End")

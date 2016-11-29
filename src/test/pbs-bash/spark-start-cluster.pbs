@@ -4,12 +4,9 @@
 #PBS -l walltime=00:20:00
 export SPARK_HOME=/ptmp/eynardbg/spark-2.0.1-bin-hadoop2.7
 export SPARK_CONF_DIR=$SPARK_HOME/conf
-INPUT=/ptmp/eynardbg/spark-2.0.1-bin-hadoop2.7/conf/
-OUTPUT=MyWordCount_txt
 
 cd $PBS_O_WORKDIR
-rm -rf $OUTPUT
 
 #Java home is declared into spark conf
 #module load jdk/1.8.0_74
-./pbs-spark-submit --pbsdsh --cores 5 --memory 20000M mywordcount.py "$INPUT" $OUTPUT
+./pbs-spark-submit --pbsdsh --cores 5 --memory 20000M
