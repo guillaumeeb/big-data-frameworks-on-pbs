@@ -26,8 +26,10 @@ A module is described in src/main/module, with a readme on its install procedure
 
 Prepare a pbs script file as presented in src/test/pbs-batch/.  
 In this script file, after the #PBS directives, you must have at leat the following lines:   
+```bash
 module load spark-on-pbs/2.0.2
 pbs-spark-launcher --cores XX --memory YYmb ZZ
+```
 
 Either you don have an application to launch yet, so ZZ is empty. It will thus launch a cluster waiting 
 for an application to be run.
@@ -41,7 +43,11 @@ It is mandatory to repeat the reserved resources both in PBS directive and to th
 You need to have a java JRE installed (at least version 1.7), Spark binaries in a shared space (eg. GPFS), and to download the
 pbs-spark-launcher script. Then, configure your spark binaries java home right, and instead of loading module, just
 define SPARK_HOME inside your pbs script file, as in src/test/pbs-batch/spark-mywordcount.pbs  
-Then you just have to call the downloaded script like above.
+Then you just have to call the downloaded script like above. So this gives:  
+```bash
+SPARK_HOME=/work/myuser/mysparkhome
+./pbs-spark-launcher --cores XX --memory YYmb ZZ
+```
 
 ### Other tools
 
