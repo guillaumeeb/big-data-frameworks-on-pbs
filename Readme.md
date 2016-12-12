@@ -52,4 +52,4 @@ SPARK_HOME=/work/myuser/mysparkhome
 ### Other tools
 
 For seeing historycal job, you can also start the spark history server using $SPARK_HOME/sbin/start-history-server.sh. 
-Do nott forget to load spark module first.
+Do not forget to load spark module first.
