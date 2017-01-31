@@ -1,0 +1,20 @@
+#!/bin/bash
+#PBS -N spark-RTWPSPERFO
+#PBS -l select=4:ncpus=6:mem=24000Mb
+#PBS -l walltime=00:20:00
+module load spark/2.1.0
+
+IMAGE_INPUT=/work/ADM/hpc/eynardbg/RTCacheWPS/E_IM_PERFO.tif
+GDAL_LIBRARY_PATH=/work/ADM/hpc/eynardbg/gdal-1.11.2-bin/lib
+SPARK_CLASS=cnes.rt.wps.main.gdal.SparkGdalPrototypeMemory
+SPARK_JAR=/work/ADM/hpc/eynardbg/RTCacheWPS/SparkCnes-0.0.1-jar-with-dependencies.jar
+WORKING_DIR=/work/ADM/hpc/eynardbg/RTCacheWPS/work-dir
+BIN_ROOT=/work/ADM/hpc/eynardbg/gdal-1.11.2-bin
+OUTPUT_DIR=/work/ADM/hpc/eynardbg/RTCacheWPS/output-dir
+TILE_SIZE=1000
+ROTATION_COUNT=2
+
+
+#cd $TMPDIR
+cd $PBS_O_WORKDIR
+pbs-spark-launcher --cores 6 --memory 24000M -- --executor-memory 22G --driver-library-path $GDAL_LIBRARY_PATH --conf spark.executor.extraLibraryPath=$GDAL_LIBRARY_PATH --conf spark.default.parallelism=24 --class $SPARK_CLASS $SPARK_JAR --hdfs-root $WORKING_DIR --driver-bin-root $BIN_ROOT --worker-bin-root $BIN_ROOT --image-input $IMAGE_INPUT  --dir-output $OUTPUT_DIR --dir-temp-hdfs $WORKING_DIR --tile-size $TILE_SIZE --rotation-count $ROTATION_COUNT

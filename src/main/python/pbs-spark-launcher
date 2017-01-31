@@ -90,7 +90,7 @@ class SSHLauncher(Launcher):
 def usage():
     sys.stderr.write("pbs-spark-launcher:  Launch an Apache Spark Cluster (Master and workers) inside a PBS job\n\t and optionally start an application on it.\n")
     sys.stderr.write("\n")
-    sys.stderr.write("Usage:  pbs-spark-submit [arguments] <app.jar|python_file> [app options]\n")
+    sys.stderr.write("Usage:  pbs-spark-submit [options] [-- [spark options]] <app.jar|python_file> [app options]\n")
     sys.stderr.write("\n")
     sys.stderr.write("Options:\n")
     sys.stderr.write("\t--help or -h\n\t\tPrint this help message\n")
@@ -155,8 +155,15 @@ elif ( not ( "SPARK_LOCAL_DIRS" in os.environ.keys() ) ):
     os.environ["SPARK_LOCAL_DIRS"] = "/tmp"
 
 # command line argument handling
+# First look for eventual "--" separator for spark options
+argstoparse = sys.argv[1:]
+spark_args = []
+if (argstoparse.count("--") > 0):
+    argstoparse = argstoparse[0:argstoparse.index("--")]
+    spark_args =  sys.argv[sys.argv.index("--") + 1:]
+
 try:
-    opts, child_args = getopt.getopt(sys.argv[1:],"C:d:hL:l:m:p:c:",["help","pbsdsh","ssh","conf-dir=","log-dir=","log4j-properties=","work-dir=","memory=","cores=","pause-time="])
+    opts, child_args = getopt.getopt(argstoparse,"C:d:hL:l:m:p:c:",["help","pbsdsh","ssh","conf-dir=","log-dir=","log4j-properties=","work-dir=","memory=","cores=","pause-time="])
 except getopt.GetoptError, err:
     sys.stderr.write(str(err)+"\n")
     usage()
@@ -181,6 +188,9 @@ for opt in opts:
         cpulimit = opt[1]
     elif ( opt[0]=="--pause-time" or opt[0]=="-p" ):
         pausetime = opt[1]
+
+# Either take spark_args or child_args
+spark_args.extend(child_args)
 
 # make sure the work dir actually exists
 if ( workdir is not None and not os.path.exists(workdir) ):
@@ -234,12 +244,12 @@ time.sleep(pausetime)
 print("services must be started")
 
 # run the user's Spark "job", if one is given
-if ( len(child_args)>0 ):
-    print("\nLaunching spark application: " + str(child_args))
+if ( len(spark_args)>0 ):
+    print("\nLaunching spark application: " + str(spark_args))
     cmdline = os.environ["SPARK_HOME"]+"/bin/spark-submit --master "+spark_master
     if ( log4j_props is not None ):
         cmdline += " --driver-java-options -Dlog4j.configuration=file:"+log4j_props
-    cmdline += " "+" ".join(child_args)
+    cmdline += " "+" ".join(spark_args)
     os.system(cmdline)
     print("Job end.")
 else:
