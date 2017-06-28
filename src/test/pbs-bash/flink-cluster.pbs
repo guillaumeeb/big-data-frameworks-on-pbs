@@ -1,0 +1,11 @@
+#!/bin/bash
+#PBS -N flink-start-cluster-module
+#PBS -l select=3:ncpus=4:mem=16Gb
+#PBS -l walltime=12:00:00
+module load flink
+
+cd $PBS_O_WORKDIR
+pbs-flink-launcher --taskmanager-heap 3072 --taskmanager-taskslots 4 --parallelism 12 
+#--taskmanager-tmpdirs $TMPDIR/flink
+
+echo "End"

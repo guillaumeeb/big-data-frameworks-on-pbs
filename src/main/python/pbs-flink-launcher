@@ -1,0 +1,188 @@
+#!/usr/bin/python -u
+# 
+# pbs-flink-launcher: Launch an Apache Flink Cluster
+#                     on PBS reserved resources.
+#                      - Start the cluster, and wait undefinitly (till wall-time or qdel)
+#                        any spark applications that could connect to the master.
+#
+#
+import glob
+import os
+import stat
+import platform
+import sys
+import time
+import shutil
+from argparse import ArgumentParser
+
+LAUNCH_TASKMANAGER_SHELL='launch_taskmanager.sh'
+LAUNCH_JOBMANAGER_SHELL='launch_jobmanager.sh'
+
+def create_parser():
+    """ Read CLI """
+    parser = ArgumentParser()
+
+    parser.add_argument('--jobmanager-heap', dest='jobmgr_heap', default=1024)
+    parser.add_argument('--taskmanager-heap', dest='taskmgr_heap', default=2048)
+    parser.add_argument('--taskmanager-taskslots', dest='taskmgr_tasks', default=1)
+    parser.add_argument('--parallelism', dest='parallelism', default=1)
+    parser.add_argument('--taskmanager-tmpdirs', dest='taskmgr_tmp', default=os.environ["TMPDIR"])
+    #parser.set_defaults(index_es=True)
+
+    options = parser.parse_args()
+    return options
+
+
+#
+# Ways to launch workers.
+# Originally there was a case for standalone shared memory systems. See pbstool web site.
+# there was also a disabled mechanism for propagatin spark environment variable. But as
+# workers are launched using java class, this is not usefull.
+#
+class Launcher:
+    def launch(self,cmdline,env):
+        raise NotImplementedError
+    def sleep(self):
+        sleeptime = 5
+        if ( "PBS_NUM_NODES" in os.environ.keys() ):
+            sleeptime += int(os.environ["PBS_NUM_NODES"])
+        time.sleep(sleeptime)
+
+#
+# Launcher implementation using pbsdsh. Not working on linux3 cluster
+#
+class PBSDSHLauncher(Launcher):
+    def launch(self,cmdline,env):
+        time.sleep(1)
+        cmd = cmdline
+        print(cmd)
+        #pbsdsh must be started with & character otherwise this script is blocked
+        os.system("pbsdsh -v -- " + cmd + " &")
+        self.sleep()
+
+#
+# Ssh launcher. It works, making it the default.
+#
+class SSHLauncher(Launcher):
+    def launch(self,cmdline,env):
+        time.sleep(1)
+        if ( "PBS_NODEFILE" in os.environ.keys() ):
+            # Grep all nodes from this pbs submit for starting workers.
+            nodefile = open(os.environ["PBS_NODEFILE"])
+            for line in nodefile.readlines():
+                argv = cmdline.split()
+                node = line.rstrip("\n")
+                ssh = "ssh"
+                if ( "SPARK_SSH" in env.keys() ):
+                    ssh=env["SPARK_SSH"]
+                argv.insert(0,ssh)
+                argv.insert(1,node)
+                sys.stderr.write(" ".join(argv)+"\n")
+                child_pid = os.fork()
+                if ( child_pid==0 ):
+                    os.execvpe(argv[0],argv,env)   
+            nodefile.close()
+            self.sleep()
+        else:
+            raise EnvironmentError("PBS_NODEFILE undefined")
+
+
+def create_flink_config(config_file_path, jobmgr_host='localhost', jobmgr_heap=1024, taskmgr_heap=2048, taskmgr_tasks=1, parallelism=1, taskmgr_tmp='/tmp/flink'):
+    #Creer un repertoire de conf temporaire
+    #Copie des fichiers de conf par defaut
+    shutil.copytree(os.environ["FLINK_HOME"] + "/conf", config_file_path)
+    os.remove(config_file_path + "/flink-conf.yaml")
+
+    #Create a new file
+    file = open(config_file_path + "/flink-conf.yaml","w") 
+    file.write("jobmanager.rpc.address: " + jobmgr_host + "\n")
+    file.write("jobmanager.heap.mb: " + str(jobmgr_heap) + "\n") 
+    file.write("taskmanager.heap.mb: " + str(taskmgr_heap) + "\n") 
+    file.write("taskmanager.numberOfTaskSlots: " + str(taskmgr_tasks) + "\n") 
+    file.write("parallelism.default: " + str(parallelism) + "\n")
+    file.write("taskmanager.tmp.dirs: " + taskmgr_tmp + "\n") 
+    file.close()
+
+
+def create_flink_launcher(script_file_path, config_file_path):
+    os.mkdir(script_file_path)
+    
+    #Create a new file
+    file = open(script_file_path + '/' + LAUNCH_TASKMANAGER_SHELL,"w")
+    file.write("#!/bin/sh\n")
+    file.write("export FLINK_CONF_DIR=" + config_file_path + "\n")
+    file.write(os.environ["FLINK_HOME"] + '/bin/taskmanager.sh start-foreground')
+    file.close()
+    st = os.stat(file.name)
+    os.chmod(file.name, st.st_mode | stat.S_IEXEC)
+    
+    file = open(script_file_path + '/' + LAUNCH_JOBMANAGER_SHELL,"w")
+    file.write("#!/bin/sh\n")
+    file.write("export FLINK_CONF_DIR=" + config_file_path + "\n")
+    file.write(os.environ["FLINK_HOME"] + '/bin/jobmanager.sh start-foreground cluster')
+    file.close()
+    st = os.stat(file.name)
+    os.chmod(file.name, st.st_mode | stat.S_IEXEC)
+
+
+#
+# main program begins here
+#
+def main():
+    """ The main """
+    # sanity checks
+    if ( not ( "PBS_JOBID" in os.environ.keys() ) ):
+        raise EnvironmentError("Not in a PBS job")
+    if ( not ( "FLINK_HOME" in os.environ.keys() ) ):
+        raise EnvironmentError("FLINK_HOME not defined")
+
+    pausetime = 3
+    launcher = PBSDSHLauncher()
+    pbs_job_id = os.environ["PBS_JOBID"]
+    # **ASSUMPTION**:  work directory is on a shared file system 
+    workdir = os.getcwd()    
+
+    # Read CLI
+    options = create_parser()
+
+    print("--> Starting flink cluster")
+    # **ASSUMPTION**:  master runs on mother superior node, this could change in the future?
+    flink_master_ip = platform.node()
+    config_file_path = os.environ["PBS_O_WORKDIR"] + '/flink-conf-' + pbs_job_id
+    create_flink_config(config_file_path, jobmgr_host=flink_master_ip, jobmgr_heap=options.jobmgr_heap,
+                             taskmgr_heap=options.taskmgr_heap, taskmgr_tasks=options.taskmgr_tasks,
+                             parallelism=options.parallelism, taskmgr_tmp=options.taskmgr_tmp)
+    
+    launcher_file_path = os.environ["PBS_O_WORKDIR"] + '/flink-launch-' + pbs_job_id
+    create_flink_launcher(launcher_file_path, config_file_path)
+    
+    #TODO il attend un repertoire ?
+    # Launch master
+    #master_cmdline = os.environ["FLINK_HOME"] + '/bin/flink-console.sh jobmanager --executionMode CLUSTER --configDir ' + config_file_path
+    master_cmdline = launcher_file_path + '/' + LAUNCH_JOBMANAGER_SHELL
+    print("Launching master " + flink_master_ip)
+    os.system(master_cmdline + " &")
+    time.sleep(pausetime)
+    
+    #Launch worker
+    #TODO : rajouter du Xmx ou autres options jvm ?
+    #worker_cmdline =  os.environ["FLINK_HOME"] + '/bin/flink-console.sh taskmanager --configDir ' + config_file_path
+    worker_cmdline = launcher_file_path + '/' + LAUNCH_TASKMANAGER_SHELL
+    print("Launching workers...")
+    launcher.launch(worker_cmdline,os.environ)    
+    
+    print("sleeping " + str(pausetime))
+    time.sleep(pausetime)
+    print("services must be started")
+    #No job declared, just leave the Spark cluster started to allow connexion from any submitted job.
+    #TODO: add option to submit directlya  job and end cluster afterwards.
+    #It will be stopped upon a qdel or when wall time is reached
+    print("Waiting indefinitly until cluster is stopped")
+    while True:
+        print("Flink cluster is still alive with master " + flink_master_ip)
+        time.sleep(60)
+
+
+if __name__ == "__main__":
+    main()
+
