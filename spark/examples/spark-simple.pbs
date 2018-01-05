@@ -1,0 +1,10 @@
+#!/bin/bash
+#PBS -N spark-wordcount
+#PBS -l select=3:ncpus=5:mem=20000Mb
+#PBS -l walltime=00:10:00
+module load spark
+
+INPUT=$SPARK_HOME/conf/
+cd $PBS_O_WORKDIR
+pbs-spark-launcher --cores 5 --memory 20000M -- --properties-file spark-defaults.conf  $SPARK_HOME/examples/src/main/python/wordcount.py $INPUT
+
