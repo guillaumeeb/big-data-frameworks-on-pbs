@@ -9,7 +9,7 @@
 # This writes a scheduler.json file into your home directory
 # You can then connect with the following Python code
 # >>> from dask.distributed import Client
-# >>> client = Client(scheduler_file='~/scheduler.json')
+# >>> client = Client(scheduler_file='scheduler.json')
 
 #Environment sourcing
 ENV_SOURCE="source ~/.bashrc; export PATH=/home/eh/eynardbg/miniconda3/bin:$PATH; source activate pangeo"
@@ -19,19 +19,18 @@ rm -f $PBS_O_WORKDIR/scheduler.json
 export OMP_NUM_THREADS=1
 NCPUS=4 #Bug in NCPUS variable in our PBS install
 MEMORY_LIMIT="18e9"
-#INTERFACE="--interface ib0 "
-INTERFACE=""
+INTERFACE="--interface ib0 "
 
 # Run Dask Scheduler
 echo "*** Launching Dask Scheduler ***"
-pbsdsh -n 0 -- /bin/bash -c "$ENV_SOURCE; dask-scheduler $INTERFACE --scheduler-file $PBS_O_WORKDIR/scheduler.json  > $PBS_O_WORKDIR/$PBS_JOBID-scheduler-$PBS_TASKNUM.out 2> $PBS_O_WORKDIR/$PBS_JOBID-scheduler-$PBS_TASKNUM.err;"&
+pbsdsh -n 0 -- /bin/bash -c "$ENV_SOURCE; dask-scheduler $INTERFACE --scheduler-file $PBS_O_WORKDIR/scheduler.json  > $PBS_O_WORKDIR/$PBS_JOBID-scheduler-$PBS_TASKNUM.log 2>&1;"&
 
 #Number of chunks
 nbNodes=`cat $PBS_NODEFILE | wc -l`
 
 echo "*** Starting Workers on Other $nbNodes Nodes ***"
 for ((i=1; i<$nbNodes; i+=1)); do
-    pbsdsh -n ${i} -- /bin/bash -c "$ENV_SOURCE; dask-worker $INTERFACE --scheduler-file $PBS_O_WORKDIR/scheduler.json --nthreads $NCPUS --memory-limit 16e9 --local-directory $TMPDIR --name worker-${i} > $PBS_O_WORKDIR/$PBS_JOBID-worker-${i}.out 2> $PBS_O_WORKDIR/$PBS_JOBID-worker-${i}.err;"&
+    pbsdsh -n ${i} -- /bin/bash -c "$ENV_SOURCE; dask-worker $INTERFACE --scheduler-file $PBS_O_WORKDIR/scheduler.json --nthreads $NCPUS --memory-limit 16e9 --local-directory $TMPDIR --name worker-${i};"&
 done
 
 echo "*** Dask cluster is starting ***"
