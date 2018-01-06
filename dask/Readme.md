@@ -88,7 +88,7 @@ Out[25]:
 
 # The production way: start a cluster and launch a script right after
 Once dask code is OK, just use the same script for starting a cluster but with a call to the python code instead of the sleep. It is as simple as that.
-````
+````bash
 #!/bin/bash
 #PBS -N dask-wordcount
 #PBS -l select=9:ncpus=4:mem=20G
@@ -136,7 +136,7 @@ python dask-wordcount.py
 # Dask Bokeh UI
 
 In order to monitor applications executed on the cluster, you can use the Spark UI. We must first get the node on which dask-scheduler has been launched, using the following command:
-````
+````bash
 $ cat scheduler.json
 {
   "type": "Scheduler",
@@ -152,7 +152,7 @@ $ cat scheduler.json
 
 We see here that the scheduler node is 10.135.36.50. We must thus connect to it.
 Default UI port is 8787, so the URL to use is  http://$IP:8787/status, in our case: http://10.135.36.50:8787/status.
-````
+````bash
 firefox http://10.135.36.50:8787/status
 ````
 
@@ -160,14 +160,14 @@ firefox http://10.135.36.50:8787/status
 If you need to manage precisly your python environment, you can deploy it using conda yourself. It is very well described here : https://github.com/pangeo-data/pangeo/wiki/Getting-Started-with-Dask-on-Cheyenne#installing-a-software-environment.
 
 Once this is done, you can use the provided script based on a conda install, the only difference with above is in the environment sourcing:
-````
+````bash
 #Environment sourcing
 ENV_SOURCE="source ~/.bashrc; export PATH=/home/eh/eynardbg/miniconda3/bin:$PATH; source activate pangeo"
 ````
 
 # Starting with nprocs instead of nthreads
 If you need to have real processes for your Dask cluster, just be carefull when managing the memory. If you launch dask-worker with 4 procs, it will start 4 procs with the configured memory limit. This means you need to divide the reserved PBS chunk memory by the number of procs in the dask-worker options, as demonstarted in the launch-dask-cluster-process-with-path.pbs script.
-````
+````bash
 #If using nprocs with dask-worker, memory limit is by proc. So memory by PBS chunk divided by nprocs
 MEMORY_LIMIT="4.5e9"
 ````
