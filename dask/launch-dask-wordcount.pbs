@@ -25,7 +25,7 @@ nbNodes=`cat $PBS_NODEFILE | wc -l`
 
 echo "*** Starting Workers on Other $nbNodes Nodes ***"
 for ((i=1; i<$nbNodes; i+=1)); do
-    pbsdsh -n ${i} -- /bin/bash -c "$ENV_SOURCE; dask-worker $INTERFACE --scheduler-file $PBS_O_WORKDIR/scheduler.json --nthreads $NCPUS --memory-limit 16e9 --local-directory $TMPDIR --name worker-${i};"&
+    pbsdsh -n ${i} -- /bin/bash -c "$ENV_SOURCE; dask-worker $INTERFACE --scheduler-file $PBS_O_WORKDIR/scheduler.json --nthreads $NCPUS --memory-limit $MEMORY_LIMIT --local-directory $TMPDIR --name worker-${i};"&
 done
 
 echo "*** Launching wordcount ***"

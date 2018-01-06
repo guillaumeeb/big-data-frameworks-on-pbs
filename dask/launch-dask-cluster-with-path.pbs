@@ -1,5 +1,5 @@
 #!/bin/bash
-#PBS -N dask-cluster-module
+#PBS -N dask-cluster-path
 #PBS -l select=9:ncpus=4:mem=20G
 #PBS -l walltime=01:00:00
 
@@ -12,7 +12,10 @@
 # >>> client = Client(scheduler_file='scheduler.json')
 
 #Environment sourcing
-module load python/3.5.2
+export PYTHONHOME=/work/logiciels/rh7/Python/3.5.2
+export PATH=$PYTHONHOME/bin:$PATH
+export LD_LIBRARY_PATH=$PYTHONHOME/lib:$LD_LIBRARY_PAT
+export PKG_CONFIG_PATH=$PYTHONHOME/lib/pkgconfig
 ENV_SOURCE="source ~/.bashrc; export PYTHONHOME=$PYTHONHOME; export PATH=$PYTHONHOME/bin:$PATH; export LD_LIBRARY_PATH=$PYTHONHOME/lib:$LD_LIBRARY_PATH; export PKG_CONFIG_PATH=$PYTHONHOME/lib/pkgconfig:$PKG_CONFIG_PATH"
 rm -f $PBS_O_WORKDIR/scheduler.json
 

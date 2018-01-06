@@ -1,5 +1,5 @@
 #!/bin/bash
-#PBS -N dask-cluster-module
+#PBS -N dask-cluster-path
 #PBS -l select=9:ncpus=4:mem=20G
 #PBS -l walltime=01:00:00
 
@@ -12,14 +12,18 @@
 # >>> client = Client(scheduler_file='scheduler.json')
 
 #Environment sourcing
-module load python/3.5.2
+export PYTHONHOME=/work/logiciels/rh7/Python/3.5.2
+export PATH=$PYTHONHOME/bin:$PATH
+export LD_LIBRARY_PATH=$PYTHONHOME/lib:$LD_LIBRARY_PAT
+export PKG_CONFIG_PATH=$PYTHONHOME/lib/pkgconfig
 ENV_SOURCE="source ~/.bashrc; export PYTHONHOME=$PYTHONHOME; export PATH=$PYTHONHOME/bin:$PATH; export LD_LIBRARY_PATH=$PYTHONHOME/lib:$LD_LIBRARY_PATH; export PKG_CONFIG_PATH=$PYTHONHOME/lib/pkgconfig:$PKG_CONFIG_PATH"
 rm -f $PBS_O_WORKDIR/scheduler.json
 
 #Options
 export OMP_NUM_THREADS=1
 NCPUS=4 #Bug in NCPUS variable in our PBS install
-MEMORY_LIMIT="18e9"
+#If using nprocs with dask-worker, memory limit is by proc. So memory by PBS chunk divided by nprocs
+MEMORY_LIMIT="4.5e9"
 INTERFACE="--interface ib0 "
 
 # Run Dask Scheduler
@@ -31,7 +35,8 @@ nbNodes=`cat $PBS_NODEFILE | wc -l`
 
 echo "*** Starting Workers on Other $nbNodes Nodes ***"
 for ((i=1; i<$nbNodes; i+=1)); do
-    pbsdsh -n ${i} -- /bin/bash -c "$ENV_SOURCE; dask-worker $INTERFACE --scheduler-file $PBS_O_WORKDIR/scheduler.json --nthreads $NCPUS --memory-limit $MEMORY_LIMIT --local-directory $TMPDIR --name worker-${i};"&
+    #--name option cant be used with nprocs
+    pbsdsh -n ${i} -- /bin/bash -c "$ENV_SOURCE; dask-worker $INTERFACE --scheduler-file $PBS_O_WORKDIR/scheduler.json --nprocs $NCPUS --nthreads 1 --memory-limit $MEMORY_LIMIT --local-directory $TMPDIR;"&
 done
 
 echo "*** Dask cluster is starting ***"
