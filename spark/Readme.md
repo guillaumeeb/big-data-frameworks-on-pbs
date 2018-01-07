@@ -81,7 +81,7 @@ sleep 3600
 ````
 
 ### Plain PBS script
-So this gives us the following script, which can be used as is:
+So this gives us the following example PBS script, which can be used as is:
 ````bash
 #!/bin/bash
 #PBS -N spark-cluster-path
@@ -103,7 +103,7 @@ NCPUS=4 #Bug in NCPUS variable in our PBS install
 MEMORY="18000M"
 INTERFACE="--interface ib0 "
 
-# Run Spark Scheduler
+# Run Spark Master
 echo "*** Launching Spark Master ***"
 pbsdsh -n 0 -- /bin/bash -c "$ENV_SOURCE; $SPARK_HOME/sbin/start-master.sh > $PBS_O_WORKDIR/$PBS_JOBID-spark-master.log 2>&1;"&
 
@@ -119,32 +119,119 @@ done
 echo "*** Spark cluster is starting ***"
 sleep 3600
 ````
-Prepare a pbs script file as presented in src/test/pbs-batch/.  
-In this script file, after the #PBS directives, you must have at leat the following lines:   
-```bash
-module load spark-on-pbs/2.2.1
-pbs-spark-launcher --cores XX --memory YYmb -- ZZ
-```
 
-Either you don have an application to launch yet, so -- ZZ is empty. It will thus launch a cluster waiting 
-for an application to be run.
-Either you have, put it in the place of ZZ with all arguments, the cluster will start launch the application, 
-and shutdown on the end, saving cluster cpu time.
+### Using intermediate script
 
-It is mandatory to repeat the reserved resources both in PBS directive and to the pbs-spark-launcher script.
+In order to simplify the use of Spark, and launching bash script has been developed: pbs-launch-spark. Its usage is the
+following:
+````
+./pbs-launch-spark -n ncpus -m memory [-p properties-file] [sparkapp]
+  ncpus: number of cpus per spark slave
+  memory: memory heap of spark slave
+  properties-file: spark properties file
+  sparkapp: spark opitions and/or applications args
+````
 
-### Without the module
+It must be launched inside a PBS script, as demonstrated below.
+````bash
+#!/bin/bash
+#PBS -N spark-cluster-path
+#PBS -l select=9:ncpus=4:mem=20G
+#PBS -l walltime=01:00:00
 
-You need to have a java JRE installed (at least version 1.7), Spark binaries in a shared space (eg. GPFS, Lustre or at least NFS), and to download the
-pbs-spark-launcher script. Then, configure your spark binaries java home correctly, and instead of loading module, just
-define SPARK_HOME inside your pbs script file, as in src/test/pbs-batch/spark-mywordcount.pbs  
-Then you just have to call the downloaded script like above. So this gives:  
-```bash
-SPARK_HOME=/work/myuser/mysparkhome
-./pbs-spark-launcher --cores XX --memory YYmb ZZ
-```
+# Qsub template for CNES HAL
+# Scheduler: PBS
 
-### Other tools
+#Environment
+export JAVA_HOME=/work/logiciels/rhall/jdk/1.8.0_112
+export SPARK_HOME=/work/logiciels/rhall/spark/2.2.1
+export PATH=$JAVA_HOME/bin:$SPARK_HOME/bin:$PATH
+NCPUS=4 #Bug in NCPUS variable in our PBS install
+MEMORY="18000M"
 
-For seeing historycal job, you can also start the spark history server using $SPARK_HOME/sbin/start-history-server.sh. 
-Do not forget to load spark module first.
+$PBS_O_WORKDIR/pbs-launch-spark -n $NCPUS -m $MEMORY $SPARK_HOME/examples/src/main/python/wordcount.py $SPARK_HOME/conf/
+````
+
+This way, the PBS script is much shorter, and pbs-launch-spark also gives the possibility to provide a properties-file
+for giving additional options like storing history of apps.
+
+### Using a module (lmod here)
+For still more simplicity, it is possible to use a predefined module on a cluster. An example is provided here for lmod.
+Once this module is deployed in your environment, launching a cluster is as simple as that:
+````bash
+#!/bin/bash
+#PBS -N spark-cluster-path
+#PBS -l select=9:ncpus=4:mem=20G
+#PBS -l walltime=01:00:00
+
+# Qsub template for CNES HAL
+# Scheduler: PBS
+
+module load spark
+pbs-launch-spark -n 4 -m "18000M"
+````
+
+### Using a started cluster
+If you've only started a cluster (with no app inside the PBS script), you can then launch spark commands from outside.
+You've just got to know the spark master host, which can be done (for example) using qstat comand:
+````bash
+$ qstat -n1 2244744.admin01
+
+admin01:
+                                                            Req'd  Req'd   Elap
+Job ID          Username Queue    Jobname    SessID NDS TSK Memory Time  S Time
+--------------- -------- -------- ---------- ------ --- --- ------ ----- - -----
+2244744.admin01 eynardbg qt1h     spark-clus   3133   9  36  180gb 01:00 R 00:00 node065/0*4+node065/1*4+node065/2*4+node065/3*4+node065/4*4+node065/5*4+node066/0*4+node066/1*4+node066/2*4
+````
+
+Spark Master is started on the first node, node065 here.
+Then, just issue a spark-submit:
+````bash
+$ export SPARK_HOME=/work/logiciels/rhall/spark/2.2.1/
+$ $SPARK_HOME/bin/spark-submit --master spark://node065:7077 $SPARK_HOME/examples/src/main/python/wordcount.py $SPARK_HOME/conf/
+````
+
+You can also use spark-shell:
+````bash
+$ $SPARK_HOME/bin/spark-shell --master spark://node065:7077
+Using Spark's default log4j profile: org/apache/spark/log4j-defaults.properties
+Setting default log level to "WARN".
+To adjust logging level use sc.setLogLevel(newLevel). For SparkR, use setLogLevel(newLevel).
+18/01/07 16:19:23 WARN NativeCodeLoader: Unable to load native-hadoop library for your platform... using builtin-java classes where applicable
+Spark context Web UI available at http://10.120.42.21:4040
+Spark context available as 'sc' (master = spark://node065:7077, app id = app-20180107161924-0002).
+Spark session available as 'spark'.
+Welcome to
+      ____              __
+     / __/__  ___ _____/ /__
+    _\ \/ _ \/ _ `/ __/  '_/
+   /___/ .__/\_,_/_/ /_/\_\   version 2.2.1
+      /_/
+
+Using Scala version 2.11.8 (Java HotSpot(TM) 64-Bit Server VM, Java 1.8.0_112)
+Type in expressions to have them evaluated.
+Type :help for more information.
+
+scala>
+````
+
+Et voilà!
+
+### Spark UI
+
+Spark UI is started along the master process, on port 8080 by default.
+
+So the only thing to do next is to open a browser on the Master
+UI URL:
+````bash
+firefox http://node065:8080
+````
+
+### Spark history server
+
+TODO
+For seeing historycal job, you can also start the spark history server using $SPARK_HOME/sbin/start-history-server.sh.
+
+### Improvements to do
+Currently, the started cluster does not use a provided InfinityBand or other High speed network if provided. It only use
+standard ethernet network. This can be an issue when moving arround big volumes.
