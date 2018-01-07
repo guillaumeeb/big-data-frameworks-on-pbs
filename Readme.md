@@ -39,4 +39,4 @@ $PBS_O_WORKDIR/pbs-launch-spark -n 4 -m "18000M" $SPARK_HOME/examples/src/main/p
 ## Contact
 
 This project has been tested on @CNES (Centre National d'Etude Spatial -- the French Space Agency) HPC cluster.
-Feel free to open an issue to ask for a correction or even for help, I will be glad to help.
+Feel free to open an issue to ask for a correction or even for help, We will be glad to help.
