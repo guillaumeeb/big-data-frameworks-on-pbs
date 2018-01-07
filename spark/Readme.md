@@ -206,7 +206,7 @@ Using Spark's default log4j profile: org/apache/spark/log4j-defaults.properties
 Setting default log level to "WARN".
 To adjust logging level use sc.setLogLevel(newLevel). For SparkR, use setLogLevel(newLevel).
 18/01/07 16:19:23 WARN NativeCodeLoader: Unable to load native-hadoop library for your platform... using builtin-java classes where applicable
-Spark context Web UI available at http://10.120.42.21:4040
+Spark context Web UI available at http://xx.yy.zz.21:4040
 Spark context available as 'sc' (master = spark://node065:7077, app id = app-20180107161924-0002).
 Spark session available as 'spark'.
 Welcome to

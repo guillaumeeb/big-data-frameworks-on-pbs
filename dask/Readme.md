@@ -72,7 +72,7 @@ Next, it is easy to connect to the cluster using Client API and apply operations
 In [1]: from dask.distributed import Client
 In [3]: client = Client(scheduler_file='scheduler.json')
 In [4]: client
-Out[4]: <Client: scheduler='tcp://10.120.40.54:8786' processes=8 cores=32>
+Out[4]: <Client: scheduler='tcp://xx.yy.zz.54:8786' processes=8 cores=32>
 In [17]: import dask.dataframe as dd
 In [21]: ddf = dd.read_csv('/work/ADM/hpc/eynardbg/supportHPC/LUT_6SV_DESERT_SENTINEL2BMSIB_B12.txt', delim_whitespace=True, header=None)
 In [25]: ddf.head()
@@ -140,7 +140,7 @@ In order to monitor applications executed on the cluster, you can use the Spark 
 $ cat scheduler.json
 {
   "type": "Scheduler",
-  "address": "tcp://10.135.36.50:8786",
+  "address": "tcp://xx.yy.zz.50:8786",
   "workers": {},
   "services": {
     "http": 9786,
@@ -150,10 +150,10 @@ $ cat scheduler.json
 }
 ````
 
-We see here that the scheduler node is 10.135.36.50. We must thus connect to it.
-Default UI port is 8787, so the URL to use is  http://$IP:8787/status, in our case: http://10.135.36.50:8787/status.
+We see here that the scheduler node is xx.yy.zz.50. We must thus connect to it.
+Default UI port is 8787, so the URL to use is  http://$IP:8787/status, in our case: http://xx.yy.zz.50:8787/status.
 ````bash
-firefox http://10.135.36.50:8787/status
+firefox http://xx.yy.zz.50:8787/status
 ````
 
 # Dask with conda install
