@@ -3,7 +3,7 @@
 ## Overview
 
 This directory contains tooling for launching a Spark cluster and Application on PBS Pro. This readme is considered as
-the associated documentation.
+the official documentation.
 
 How this works:
  1. Prerequisite: Java and Spark must be installed on a shared folder (GPFS or equivalent),

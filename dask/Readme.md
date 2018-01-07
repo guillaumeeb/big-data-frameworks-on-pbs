@@ -1,8 +1,15 @@
 # Overview
 
-Dask is launched with an existing python environment available on a distributed storage space (either with conda or virtual env or plain python installation). The idea is to book several chunks using PBS qsub, and then to start a dask-scheduler on one chunk, and dask-workers on the others, using `pbsdsh` command. So once Dask is installed, the only thing to do is launch a PBS script with the right commands.
+This directory contains tooling for launching a Dask cluster and application on PBS Pro. This readme is considered as
+the official documentation.
 
-The only difficulty is to propagate correct ENV variables in this script with pbsdsh, thus the first lines with the exports. It is also very important to use PBS ENV variable $TMPDIR as Dask local storage.
+Dask is launched with an existing python environment available on a distributed storage space (either with conda or
+virtual env or plain python installation). The idea is to book several chunks using PBS qsub, and then to start a
+dask-scheduler on one chunk, and dask-workers on the others, using `pbsdsh` command. So once Dask is installed,
+the only thing to do is launch a PBS script with the right commands.
+
+The only difficulty is to propagate correct ENV variables in this script with pbsdsh, thus the first lines with the
+exports. It is also very important to use PBS ENV variable $TMPDIR as Dask local storage.
 
 This Readme and scripts provided are inspired by several sources:
 * https://github.com/dask/distributed/issues/1260
