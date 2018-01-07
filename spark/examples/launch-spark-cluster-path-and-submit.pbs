@@ -18,7 +18,7 @@ NCPUS=4 #Bug in NCPUS variable in our PBS install
 MEMORY="18000M"
 INTERFACE="--interface ib0 "
 
-# Run Dask Scheduler
+# Run Spark Master
 echo "*** Launching Spark Master ***"
 pbsdsh -n 0 -- /bin/bash -c "$ENV_SOURCE; $SPARK_HOME/sbin/start-master.sh > $PBS_O_WORKDIR/$PBS_JOBID-spark-master.log 2>&1;"&
 

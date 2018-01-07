@@ -1,27 +1,124 @@
-# Spark usage
+# Spark on PBS
 
 ## Overview
 
-This projects contains tooling and documentation for launching a Spark cluster and Application on PBS Pro.
-By default, it works as follows:  
- 1. qsub the python script pbs-spark-launcher,  
- 2. A Spark standalone master is started on the MOM (Parent) PBS node,  
- 3. Using pbsdsh (or ssh), Spark standalone slaves are started on every node requested to PBS,  
- 4. A time wait is performed in order to wait for all slaves to be up,
- 5. Two possiblities:  
-   a. Either a Spark application is launched, and at its end the Spark cluster is killed,  
-   b. Either the cluster stays alive waiting for applications, until wall time is reached or qdel is invoked.
+This directory contains tooling for launching a Spark cluster and Application on PBS Pro. This readme is considered as
+the associated documentation.
+
+How this works:
+ 1. Prerequisite: Java and Spark must be installed on a shared folder (GPFS or equivalent),
+   * For Spark, you just need to download a precompiled version on the download page at http://spark.apache.org/downloads.html
+ 2. Chunk servers are booked using PBS qsub command.
+ 3. Using pbsdsh, Spark standalone master and slaves are started on every node requested to PBS,
 
 ## Project organisation
 
-Some pbs examples in examples folder. This scripts uses the python spark launcher _pbs-spark-launcher_.
-It needs to have Spark binaries deployed on GPFS or shared file system.
-A module is described module, for use with lmod, with a readme on its install procedure.
+Some pbs examples in the _examples_ folder. This scripts provides different ways of starting a cluster and launching
+an app: using directly the installation PATH, with an lmod based module, with an intermediate script (see below).
+The lmod module file is provided in module directory.
+In the current directory, the pbs-launch-spark shell script simplifies the PBS script.
 
 ## How to use it
 
-### With the module
+### Functionnality
 
+Two main possibilities are given to the user:
+* Just start a Spark cluster using PBS, and then use it from an interactive terminal using spark-submot or other commands
+* Start a cluster and submit right after an application using spark-submit, this should be the production use of this tool.
+
+### How this works
+
+This paragraph shows how the spark cluster is started on PBS using just a standalone PBS script
+(given that Java and Spark binaries are already available somewhere). This is mostly for explanation purpose as using
+the pbs-launch-spark script (see below) is much simpler.
+
+Three main part are perfomed to correctly start Spark:
+1. Prepare environment variables:
+````bash
+export JAVA_HOME=/work/logiciels/rhall/jdk/1.8.0_112
+export SPARK_HOME=/work/logiciels/rhall/spark/2.2.1
+export PATH=$JAVA_HOME/bin:$SPARK_HOME/bin:$PATH
+export SPARK_NO_DAEMONIZE="True"
+ENV_SOURCE="source ~/.bashrc; export JAVA_HOME=$JAVA_HOME; export SPARK_HOME=$SPARK_HOME; export SPARK_NO_DAEMONIZE=$SPARK_NO_DAEMONIZE; export PATH=$JAVA_HOME/bin:$SPARK_HOME/bin:$PATH"
+
+#Options
+NCPUS=4 #Bug in NCPUS variable in our PBS install
+MEMORY="18000M"
+````
+It tells where are installed Java and Spark, to not demonize spark (useful later for pbsdsh commandsà, and then prepare
+a source command to use in pbsdsh, which launch commands without standard user env.
+We then also position the number of cores and memory to use per Spark slaves.
+
+2. Start Spark using pbsdsh and correct options
+````bash
+# Run Spark Scheduler
+echo "*** Launching Spark Master ***"
+pbsdsh -n 0 -- /bin/bash -c "$ENV_SOURCE; $SPARK_HOME/sbin/start-master.sh > $PBS_O_WORKDIR/$PBS_JOBID-spark-master.log 2>&1;"&
+
+SPARK_MASTER="spark://"`head -1 $PBS_NODEFILE`":7077"
+#Number of chunks
+nbNodes=`cat $PBS_NODEFILE | wc -l`
+
+echo "*** Starting Workers on other $nbNodes Nodes ***"
+for ((i=1; i<$nbNodes; i+=1)); do
+    pbsdsh -n ${i} -- /bin/bash -c "$ENV_SOURCE; $SPARK_HOME/sbin/start-slave.sh --memory $MEMORY --cores $NCPUS --work-dir $TMPDIR $SPARK_MASTER;"&
+done
+````
+
+The Spark master is launched on one of the chunks, and slaves on the others. What is important here is the use of PBS
+TMPDIR env variable for storing data localy on the compute nodes.
+
+3. Either wait or launch an application
+````bash
+echo "*** Submitting app ***"
+spark-submit --master $SPARK_MASTER $SPARK_HOME/examples/src/main/python/wordcount.py $SPARK_HOME/conf/
+````
+The spark-submit command can be used directly in the script, or you can also just wait in it, and use spark-submit or
+even spark-shell mutliple times from a terminal.
+````bash
+echo "*** Spark cluster is starting ***"
+sleep 3600
+````
+
+### Plain PBS script
+So this gives us the following script, which can be used as is:
+````bash
+#!/bin/bash
+#PBS -N spark-cluster-path
+#PBS -l select=9:ncpus=4:mem=20G
+#PBS -l walltime=01:00:00
+
+# Qsub template for CNES HAL
+# Scheduler: PBS
+
+#Environment sourcing
+export JAVA_HOME=/work/logiciels/rhall/jdk/1.8.0_112
+export SPARK_HOME=/work/logiciels/rhall/spark/2.2.1
+export PATH=$JAVA_HOME/bin:$SPARK_HOME/bin:$PATH
+export SPARK_NO_DAEMONIZE="True"
+ENV_SOURCE="source ~/.bashrc; export JAVA_HOME=$JAVA_HOME; export SPARK_HOME=$SPARK_HOME; export SPARK_NO_DAEMONIZE=$SPARK_NO_DAEMONIZE; export PATH=$JAVA_HOME/bin:$SPARK_HOME/bin:$PATH"
+
+#Options
+NCPUS=4 #Bug in NCPUS variable in our PBS install
+MEMORY="18000M"
+INTERFACE="--interface ib0 "
+
+# Run Spark Scheduler
+echo "*** Launching Spark Master ***"
+pbsdsh -n 0 -- /bin/bash -c "$ENV_SOURCE; $SPARK_HOME/sbin/start-master.sh > $PBS_O_WORKDIR/$PBS_JOBID-spark-master.log 2>&1;"&
+
+SPARK_MASTER="spark://"`head -1 $PBS_NODEFILE`":7077"
+#Number of chunks
+nbNodes=`cat $PBS_NODEFILE | wc -l`
+
+echo "*** Starting Workers on other $nbNodes Nodes ***"
+for ((i=1; i<$nbNodes; i+=1)); do
+    pbsdsh -n ${i} -- /bin/bash -c "$ENV_SOURCE; $SPARK_HOME/sbin/start-slave.sh --memory $MEMORY --cores $NCPUS --work-dir $TMPDIR $SPARK_MASTER;"&
+done
+
+echo "*** Spark cluster is starting ***"
+sleep 3600
+````
 Prepare a pbs script file as presented in src/test/pbs-batch/.  
 In this script file, after the #PBS directives, you must have at leat the following lines:   
 ```bash
