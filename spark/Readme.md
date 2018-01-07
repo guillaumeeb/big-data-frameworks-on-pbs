@@ -13,7 +13,7 @@ How this works:
 
 ## Project organisation
 
-Some pbs examples in the _examples_ folder. This scripts provides different ways of starting a cluster and launching
+Some pbs examples are in the _examples_ folder. they provide different ways of starting a cluster and launching
 an app: using directly the installation PATH, with an lmod based module, with an intermediate script (see below).
 The lmod module file is provided in module directory.
 In the current directory, the pbs-launch-spark shell script simplifies the PBS script.
@@ -23,7 +23,7 @@ In the current directory, the pbs-launch-spark shell script simplifies the PBS s
 ### Functionnality
 
 Two main possibilities are given to the user:
-* Just start a Spark cluster using PBS, and then use it from an interactive terminal using spark-submot or other commands
+* Just start a Spark cluster using PBS, and then use it from an interactive terminal using spark-submit or other commands,
 * Start a cluster and submit right after an application using spark-submit, this should be the production use of this tool.
 
 ### How this works
@@ -34,6 +34,7 @@ the pbs-launch-spark script (see below) is much simpler.
 
 Three main part are perfomed to correctly start Spark:
 1. Prepare environment variables:
+
 ````bash
 export JAVA_HOME=/work/logiciels/rhall/jdk/1.8.0_112
 export SPARK_HOME=/work/logiciels/rhall/spark/2.2.1
@@ -50,6 +51,7 @@ a source command to use in pbsdsh, which launch commands without standard user e
 We then also position the number of cores and memory to use per Spark slaves.
 
 2. Start Spark using pbsdsh and correct options
+
 ````bash
 # Run Spark Scheduler
 echo "*** Launching Spark Master ***"
@@ -69,6 +71,7 @@ The Spark master is launched on one of the chunks, and slaves on the others. Wha
 TMPDIR env variable for storing data localy on the compute nodes.
 
 3. Either wait or launch an application
+
 ````bash
 echo "*** Submitting app ***"
 spark-submit --master $SPARK_MASTER $SPARK_HOME/examples/src/main/python/wordcount.py $SPARK_HOME/conf/
