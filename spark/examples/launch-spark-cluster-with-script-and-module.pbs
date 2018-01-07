@@ -1,0 +1,10 @@
+#!/bin/bash
+#PBS -N spark-cluster-path
+#PBS -l select=9:ncpus=4:mem=20G
+#PBS -l walltime=01:00:00
+
+# Qsub template for CNES HAL
+# Scheduler: PBS
+
+module load spark
+pbs-launch-spark -n 4 -m "18000M"

@@ -1,0 +1,68 @@
+#!/bin/bash
+#Environment sourcing
+export SPARK_NO_DAEMONIZE="True"
+ENV_SOURCE="source ~/.bashrc; export JAVA_HOME=$JAVA_HOME; export SPARK_HOME=$SPARK_HOME; export SPARK_NO_DAEMONIZE=$SPARK_NO_DAEMONIZE; export PATH=$JAVA_HOME/bin:$SPARK_HOME/bin:$PATH"
+
+#HELP
+show_help(){
+  echo "$0 -n ncpus -m memory [-p properties-file] [sparkapp]"
+  echo "  ncpus: number of cpus per spark slave"
+  echo "  memory: memory heap of spark slave"
+  echo "  properties-file: spark properties file"
+  echo "  sparkapp: spark opitions and/or applications args" 
+}
+#Options parsing
+NCPUS=$NCPUS
+MEMORY=""
+PROPERTIES_FILE=""
+while getopts "h?n:m:p:c" opt; do
+    case "$opt" in
+    h|\?)
+        show_help
+        exit 0
+        ;;
+    n)  NCPUS=$OPTARG
+        ;;
+    m)  MEMORY=$OPTARG
+        ;;
+    p)  PROPERTIES_FILE="--properties-file $OPTARG"
+    esac
+done
+
+if [ -z "$MEMORY" ]; then
+   show_help
+   exit 1
+fi
+
+if [ -z "$NCPUS" ]; then
+   show_help
+   exit 1
+fi
+
+#Now go to positionnal args
+shift $((OPTIND-1))
+
+# Run Spark Master
+echo "*** Starting Spark master ***"
+pbsdsh -n 0 -- /bin/bash -c "$ENV_SOURCE; $SPARK_HOME/sbin/start-master.sh $PROPERTIES_FILE > $PBS_O_WORKDIR/$PBS_JOBID-spark-master.log 2>&1;"&
+
+SPARK_MASTER="spark://"`head -1 $PBS_NODEFILE`":7077"
+#Number of chunks
+nbNodes=`cat $PBS_NODEFILE | wc -l`
+
+echo "*** Starting Workers on other $nbNodes Nodes ***"
+for ((i=1; i<$nbNodes; i+=1)); do
+    pbsdsh -n ${i} -- /bin/bash -c "$ENV_SOURCE; $SPARK_HOME/sbin/start-slave.sh --memory $MEMORY --cores $NCPUS --work-dir $TMPDIR $SPARK_MASTER $PROPERTIES_FILE;"&
+done
+
+if [ -z "$@" ];then
+  echo "Spark cluster is starting"
+  while true; do 
+    sleep 60
+    echo "Spark cluster is running"
+  done
+else
+  echo "*** Submitting app ***"
+  spark-submit --master $SPARK_MASTER $PROPERTIES_FILE $@
+fi
+

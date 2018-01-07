@@ -1,0 +1,16 @@
+#!/bin/bash
+#PBS -N spark-cluster-path
+#PBS -l select=9:ncpus=4:mem=20G
+#PBS -l walltime=01:00:00
+
+# Qsub template for CNES HAL
+# Scheduler: PBS
+
+#Environment 
+export JAVA_HOME=/work/logiciels/rhall/jdk/1.8.0_112
+export SPARK_HOME=/work/logiciels/rhall/spark/2.2.1
+export PATH=$JAVA_HOME/bin:$SPARK_HOME/bin:$PATH
+NCPUS=4 #Bug in NCPUS variable in our PBS install
+MEMORY="18000M"
+
+$PBS_O_WORKDIR/pbs-launch-spark -n $NCPUS -m $MEMORY
