@@ -237,9 +237,50 @@ firefox http://node065:8080
 
 ### Spark history server
 
-TODO
-For seeing historycal job, you can also start the spark history server using $SPARK_HOME/sbin/start-history-server.sh.
+If you want to enable history of Spark applications in order to be able to take a look at the execution stats and informations
+after the app is over, you've got to enable the write of history file. This can be done by modifying the following properties of
+the application execution:
+````bash
+spark.eventLog.enabled           true
+spark.eventLog.dir               file:///work/ADM/hpc/eynardbg/BigData/spark/history
+spark.history.fs.logDirectory    file:///work/ADM/hpc/eynardbg/BigData/spark/history
+````
 
-### Improvements to do
+If you've got your own installation of Spark, just modify the spark-defaults.conf in the $SPARK_HOME/conf folder.
+If not, you can still create a properties file in a custom directory, and use it. Then, just use the pbs-launch-spark
+script with the -p argument:
+````bash
+#!/bin/bash
+#PBS -N spark-cluster-path
+#PBS -l select=9:ncpus=4:mem=20G
+#PBS -l walltime=01:00:00
+
+# Qsub template for CNES HAL
+# Scheduler: PBS
+
+#Environment
+export JAVA_HOME=/work/logiciels/rhall/jdk/1.8.0_112
+export SPARK_HOME=/work/logiciels/rhall/spark/2.2.1
+export PATH=$JAVA_HOME/bin:$SPARK_HOME/bin:$PATH
+NCPUS=4 #Bug in NCPUS variable in our PBS install
+MEMORY="18000M"
+
+$PBS_O_WORKDIR/pbs-launch-spark -n $NCPUS -m $MEMORY -p $PBS_O_WORKDIR/spark-defaults.conf $SPARK_HOME/examples/src/main/python/wordcount.py $SPARK_HOME/conf/
+````
+Or if you've started a independant cluster, use --properties-file with spark-submit:
+````bash
+$SPARK_HOME/bin/spark-submit --master spark://node029:7077 --properties-file spark-defaults.conf $SPARK_HOME/examples/src/main/python/wordcount.py $SPARK_HOME/conf/
+````
+
+To visualize the history, you must then start the history server, this can be done this way:
+````bash
+export SPARK_LOG_DIR=spark-logs; $SPARK_HOME/sbin/start-history-server.sh --properties-file spark-defaults.conf
+````
+
+It is important to position SPARK_LOG_DIR to a (existing) directory you own.
+
+Then, if you've not modified the history server port, just open firefox to http://yourhost:18080.
+
+### Improvements/to do
 Currently, the started cluster does not use a provided InfinityBand or other High speed network if provided. It only use
 standard ethernet network. This can be an issue when moving arround big volumes.
