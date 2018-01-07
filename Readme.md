@@ -2,8 +2,9 @@
 
 ## Introduction
 
-This projects contains tooling and documentation for launching Spark, Flink or Dask on a PBS cluster that has access to
-a shared file system.
+This projects contains tooling and documentation for launching Spark (http://spark.apache.org), Flink
+(https://flink.apache.org/) or Dask (https://distributed.readthedocs.io/) on a PBS (http://pbspro.org/)
+cluster that has access to a shared file system.
 
 The mechanisms are always the same : 
  1. qsub a PBS job which takes sevral chunks using select option
