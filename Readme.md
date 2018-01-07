@@ -3,7 +3,7 @@
 ## Introduction
 
 This projects contains tooling and documentation for launching Spark, Flink or Dask on a PBS cluster with 
-a shared repository.
+a shared repository. See readme files in all the subdirectories for more informations.
 
 The mechanisms are always the same : 
  1. qsub a PBS job which takes sevral chunks using select option
