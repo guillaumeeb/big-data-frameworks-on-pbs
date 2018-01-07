@@ -32,8 +32,8 @@ This paragraph shows how the spark cluster is started on PBS using just a standa
 (given that Java and Spark binaries are already available somewhere). This is mostly for explanation purpose as using
 the pbs-launch-spark script (see below) is much simpler.
 
-Three main part are perfomed to correctly start Spark:
-1. Prepare environment variables:
+Three main part are perfomed to correctly start Spark
+#### Prepare environment variables:
 
 ````bash
 export JAVA_HOME=/work/logiciels/rhall/jdk/1.8.0_112
@@ -46,14 +46,14 @@ ENV_SOURCE="source ~/.bashrc; export JAVA_HOME=$JAVA_HOME; export SPARK_HOME=$SP
 NCPUS=4 #Bug in NCPUS variable in our PBS install
 MEMORY="18000M"
 ````
-It tells where are installed Java and Spark, to not demonize spark (useful later for pbsdsh commandsà, and then prepare
-a source command to use in pbsdsh, which launch commands without standard user env.
+It tells where are installed Java and Spark, to not demonize spark (useful later for pbsdsh commands, and then prepare
+a source command to use in ``pbsdsh`` (which launch commands without standard user env).
 We then also position the number of cores and memory to use per Spark slaves.
 
-2. Start Spark using pbsdsh and correct options
+#### Start Spark using pbsdsh and correct options
 
 ````bash
-# Run Spark Scheduler
+# Run Spark Master
 echo "*** Launching Spark Master ***"
 pbsdsh -n 0 -- /bin/bash -c "$ENV_SOURCE; $SPARK_HOME/sbin/start-master.sh > $PBS_O_WORKDIR/$PBS_JOBID-spark-master.log 2>&1;"&
 
@@ -70,14 +70,14 @@ done
 The Spark master is launched on one of the chunks, and slaves on the others. What is important here is the use of PBS
 TMPDIR env variable for storing data localy on the compute nodes.
 
-3. Either wait or launch an application
+#### Either wait or launch an application
 
 ````bash
 echo "*** Submitting app ***"
 spark-submit --master $SPARK_MASTER $SPARK_HOME/examples/src/main/python/wordcount.py $SPARK_HOME/conf/
 ````
 The spark-submit command can be used directly in the script, or you can also just wait in it, and use spark-submit or
-even spark-shell mutliple times from a terminal.
+even spark-shell mutliple times from a terminal (see below).
 ````bash
 echo "*** Spark cluster is starting ***"
 sleep 3600
@@ -125,7 +125,7 @@ sleep 3600
 
 ### Using intermediate script
 
-In order to simplify the use of Spark, and launching bash script has been developed: pbs-launch-spark. Its usage is the
+In order to simplify the use of Spark, a bash script has been developed: pbs-launch-spark. Its usage is the
 following:
 ````
 ./pbs-launch-spark -n ncpus -m memory [-p properties-file] [sparkapp]
@@ -159,8 +159,10 @@ This way, the PBS script is much shorter, and pbs-launch-spark also gives the po
 for giving additional options like storing history of apps.
 
 ### Using a module (lmod here)
-For still more simplicity, it is possible to use a predefined module on a cluster. An example is provided here for lmod.
+
+For still more simplicity, it is possible to use a predefined module on a cluster. An example is provided (in _module_ directory) for lmod.
 Once this module is deployed in your environment, launching a cluster is as simple as that:
+
 ````bash
 #!/bin/bash
 #PBS -N spark-cluster-path
