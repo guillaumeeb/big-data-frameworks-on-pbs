@@ -11,6 +11,9 @@ How this works:
  2. Chunk servers are booked using PBS qsub command.
  3. Using pbsdsh, Spark standalone master and slaves are started on every node requested to PBS,
 
+The work here is inspired both from the work on Dask (see dask folder of the repository) and at the beginning by what
+has been done here: https://www.osc.edu/~troy/pbstools/man/pbs-spark-submit.
+
 ## Project organisation
 
 Some pbs examples are in the _examples_ folder. they provide different ways of starting a cluster and launching
