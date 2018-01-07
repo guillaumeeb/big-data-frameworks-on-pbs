@@ -1,0 +1,264 @@
+#!/usr/bin/python -u
+# 
+# pbs-spark-launcher: Launch an Apache Spark Cluster and optionnaly a Spark application
+#                     on PBS reserved resources.
+#                     Two modes:
+#                      - Start the cluster, launch the application, stop (kill) everything
+#                      - Start the cluster, and wait undefinitly (till wall-time or qdel)
+#                        any spark applications that could connect to the master.
+#
+# Based on https://www.osc.edu/~troy/pbstools/man/pbs-spark-submit, below old comment an license.
+# A lot has been remove to simplify the use. Some corrections and improvements.
+#
+# pbs-spark-submit:  Run an Apache Spark "job" (including optionally
+#                    starting the Spark services) inside a PBS job.
+# Copyright 2014, 2015 University of Tennessee
+#
+# License:  GNU GPL v2; see ../COPYING for details.
+# Revision info:
+# $HeadURL$
+# $Revision$
+# $Date$
+import getopt
+import glob
+import os
+import platform
+import sys
+import time
+
+#
+# Ways to launch workers.
+# Originally there was a case for standalone shared memory systems. See pbstool web site.
+# there was also a disabled mechanism for propagatin spark environment variable. But as
+# workers are launched using java class, this is not usefull.
+#
+class Launcher:
+    def launch(self,cmdline,env):
+        raise NotImplementedError
+    def sleep(self):
+        sleeptime = 5
+        if ( "PBS_NUM_NODES" in os.environ.keys() ):
+            sleeptime += int(os.environ["PBS_NUM_NODES"])
+        time.sleep(sleeptime)
+
+#
+# Launcher implementation using pbsdsh. Not working on linux3 cluster
+#
+class PBSDSHLauncher(Launcher):
+    def launch(self,cmdline,env):
+        time.sleep(1)
+        cmd = cmdline
+        print(cmd)
+        #pbsdsh must be started with & character otherwise this script is blocked
+        os.system("pbsdsh -v -- " + cmd + " &")
+        self.sleep()
+
+#
+# Ssh launcher. It works, making it the default.
+#
+class SSHLauncher(Launcher):
+    def launch(self,cmdline,env):
+        time.sleep(1)
+        if ( "PBS_NODEFILE" in os.environ.keys() ):
+            # Grep all nodes from this pbs submit for starting workers.
+            nodefile = open(os.environ["PBS_NODEFILE"])
+            for line in nodefile.readlines():
+                argv = cmdline.split()
+                node = line.rstrip("\n")
+                ssh = "ssh"
+                if ( "SPARK_SSH" in env.keys() ):
+                    ssh=env["SPARK_SSH"]
+                argv.insert(0,ssh)
+                argv.insert(1,node)
+                sys.stderr.write(" ".join(argv)+"\n")
+                child_pid = os.fork()
+                if ( child_pid==0 ):
+                    os.execvpe(argv[0],argv,env)   
+            nodefile.close()
+            self.sleep()
+        else:
+            raise EnvironmentError("PBS_NODEFILE undefined")
+
+#
+# documentation
+# TODO: Too many options: some of them are available through env variables too.
+# GEY: Some has been cleaned
+# A lot of options allowed to read properties or properties file in many ways, and then
+# gives these properties to the spark standalone daemon. This does not seem to be useful for 
+# now. Maybe it should directly be put in the spark conf dir if needed.
+#
+def usage():
+    sys.stderr.write("pbs-spark-launcher:  Launch an Apache Spark Cluster (Master and workers) inside a PBS job\n\t and optionally start an application on it.\n")
+    sys.stderr.write("\n")
+    sys.stderr.write("Usage:  pbs-spark-submit [options] [-- [spark options]] <app.jar|python_file> [app options]\n")
+    sys.stderr.write("\n")
+    sys.stderr.write("Options:\n")
+    sys.stderr.write("\t--help or -h\n\t\tPrint this help message\n")
+    sys.stderr.write("\t--pbsdsh\n\t\tUse the pbsdsh process launcher (default).\n")
+    sys.stderr.write("\t--ssh\n\t\tUse the ssh process launcher.\n")
+    sys.stderr.write("\t--conf-dir <confdir> or -C <confdir>\n\t\tLook in <confdir> for Java properties files.\n")
+    sys.stderr.write("\t--log-dir <logdir> or -L <logdir>\n\t\tPlace logs in <logdir>.\n")
+    sys.stderr.write("\t--log4j-properties <propsfile> or -l <propsfile>\n\t\tRead log4j properties from <propsfile>.\n")
+    sys.stderr.write("\t--work-dir <workdir> or -d <workdir>\n\t\tUse <workdir> as Spark program's working directory.\n")
+    sys.stderr.write("\t--memory <memlimit> or -m <memlimit>\n\t\tSet per-worker memory limit.\n")
+    sys.stderr.write("\t--cores <cpulimit> or -c <cpulimit>\n\t\tSet per-worker CPU limit.\n")
+    sys.stderr.write("\t--pausetime <N> or -p <N>\n\t\tPause <N> seconds between startup stages (default 5).\n")
+    sys.stderr.write("\n")
+    sys.stderr.write("Run \"man pbs-spark-submit\" for more details.\n")
+    sys.stderr.write("\n")
+    sys.exit(0)
+    
+
+#
+# main program begins here
+#
+
+# sanity checks
+if ( not ( "PBS_JOBID" in os.environ.keys() ) ):
+    raise EnvironmentError("Not in a PBS job")
+if ( not ( "SPARK_HOME" in os.environ.keys() ) ):
+    raise EnvironmentError("SPARK_HOME not defined")
+
+# set up default environment
+memlimit = None
+cpulimit = None
+child_args = []
+properties = {}
+pausetime = 3
+launcher = PBSDSHLauncher()
+log4j_props = None
+
+if ( "SPARK_LAUNCHER" in os.environ.keys() ):
+    if ( os.environ["SPARK_LAUNCHER"] in ("pbsdsh","PBSDSH") ):
+        launcher = PBSDSHLauncher()
+    if ( os.environ["SPARK_LAUNCHER"] in ("ssh","SSH") ):
+        launcher = SSHLauncher()
+if ( not ( "SPARK_CONF_DIR" in os.environ.keys() ) ):
+    #Default conf of provided Spark is used.
+    os.environ["SPARK_CONF_DIR"] = os.environ["SPARK_HOME"] + "/conf"
+if ( not ( "SPARK_LOG_DIR" in os.environ.keys() ) ):
+    os.environ["SPARK_LOG_DIR"] = os.getcwd() + "/spark-logs"
+    #Ensure folder exists
+    if (not os.path.exists(os.environ["SPARK_LOG_DIR"])):
+        os.makedirs(os.environ["SPARK_LOG_DIR"])
+
+# manage scratch directories
+# **ASSUMPTION**:  work directory is on a shared file system
+workdir = os.getcwd()
+if ( "SCRATCHDIR" in os.environ.keys() ):
+    workdir = os.environ["SCRATCHDIR"]+"/spark-"+os.environ["PBS_JOBID"]
+# SPARK_LOCAL_DIRS should be node-local
+if ( ( "TMPDIR" in os.environ.keys() ) and
+     not ( "SPARK_LOCAL_DIRS" in os.environ.keys() ) ):
+    os.environ["SPARK_LOCAL_DIRS"] = os.environ["TMPDIR"]
+elif ( not ( "SPARK_LOCAL_DIRS" in os.environ.keys() ) ):
+    os.environ["SPARK_LOCAL_DIRS"] = "/tmp"
+
+# command line argument handling
+# First look for eventual "--" separator for spark options
+argstoparse = sys.argv[1:]
+spark_args = []
+if (argstoparse.count("--") > 0):
+    argstoparse = argstoparse[0:argstoparse.index("--")]
+    spark_args =  sys.argv[sys.argv.index("--") + 1:]
+
+try:
+    opts, child_args = getopt.getopt(argstoparse,"C:d:hL:l:m:p:c:",["help","pbsdsh","ssh","conf-dir=","log-dir=","log4j-properties=","work-dir=","memory=","cores=","pause-time="])
+except getopt.GetoptError, err:
+    sys.stderr.write(str(err)+"\n")
+    usage()
+for opt in opts:
+    if ( opt[0]=="--help" or opt[0]=="-h" ):
+        usage()
+    elif ( opt[0]=="--pbsdsh" ):
+        launcher = PBSDSHLauncher()
+    elif ( opt[0]=="--ssh" ):
+        launcher = SSHLauncher()
+    elif ( opt[0]=="--conf-dir" or opt[0]=="-C" ):
+        os.environ["SPARK_CONF_DIR"] = opt[1]
+    elif ( opt[0]=="--log-dir" or opt[0]=="-L" ):
+        os.environ["SPARK_LOG_DIR"] = opt[1]
+    elif ( opt[0]=="--log4j-properties" or opt[0]=="-l" ):
+        log4j_props = opt[1]
+    elif ( opt[0]=="--work-dir" or opt[0]=="-d" ):
+        workdir = opt[1]
+    elif ( opt[0]=="--memory" or opt[0]=="-m" ):
+        memlimit = opt[1]
+    elif ( opt[0]=="--cores" or opt[0]=="-c" ):
+        cpulimit = opt[1]
+    elif ( opt[0]=="--pause-time" or opt[0]=="-p" ):
+        pausetime = opt[1]
+
+# Either take spark_args or child_args
+spark_args.extend(child_args)
+
+# make sure the work dir actually exists
+if ( workdir is not None and not os.path.exists(workdir) ):
+    os.mkdir(workdir)
+
+
+# **ASSUMPTION**:  master runs on mother superior node, this could change in the future?
+os.environ["SPARK_MASTER_IP"] = platform.node()
+if ( not ( "SPARK_MASTER_PORT" in os.environ.keys() ) ):
+    os.environ["SPARK_MASTER_PORT"] = "7077"
+#Dont put spark_master in environment, this causes problem with Spark trying to rsync it, which is not needed here.
+spark_master = "spark://"+os.environ["SPARK_MASTER_IP"]+":"+str(os.environ["SPARK_MASTER_PORT"])
+#sys.stderr.write("Spark master = "+os.environ["SPARK_MASTER"]+"\n")
+
+# stick any properties in the appropriate environment variable
+if ( len(properties)>0 ):
+    if ( "SPARK_DAEMON_JAVA_OPTS" in os.environ.keys() ):
+        os.environ["SPARK_DAEMON_JAVA_OPTS"] += " "+propsToCmdLine(properties)
+    else:
+        os.environ["SPARK_DAEMON_JAVA_OPTS"] = propsToCmdLine(properties)
+
+# launch master on mother superior
+cmdline = os.environ["SPARK_HOME"]+"/sbin/start-master.sh"
+print("Launching master " + spark_master)
+os.system(cmdline+" &")
+sys.stderr.write(cmdline+"\n")
+#sys.stdout.write("spark_master="+spark_master+"\n")
+#Here whe should have a test for master started or not.
+time.sleep(pausetime)
+
+# launch workers
+#cmdline = os.environ["SPARK_HOME"]+"/sbin/start-slave.sh"
+#Use spark-class because we do not want to start a service, but have a process that do not finish except in error or when killed
+# Else pbsdsh will end and stop the service
+# With direct use of the class, worker logs are outputed to stderr. We could add a redirect if needed, but this is good
+cmdline = os.environ["SPARK_HOME"]+"/bin/spark-class org.apache.spark.deploy.worker.Worker"
+if ( memlimit is not None ):
+    cmdline += " --memory "+memlimit
+if ( cpulimit is not None ):
+    cmdline += " --cores "+cpulimit
+if ( workdir is not None ):
+    cmdline += " --work-dir "+workdir
+cmdline += " "+spark_master
+#cmdline = "$PBS_O_WORKDIR/start-slave.sh " + spark_master
+sys.stderr.write(cmdline+"\n")
+print("Launching services...")
+launcher.launch(cmdline,os.environ)
+#TODO: here we should wait that the master has all its workers started
+print("sleeping " + str(pausetime))
+time.sleep(pausetime)
+print("services must be started")
+
+# run the user's Spark "job", if one is given
+if ( len(spark_args)>0 ):
+    print("\nLaunching spark application: " + str(spark_args))
+    cmdline = os.environ["SPARK_HOME"]+"/bin/spark-submit --master "+spark_master
+    if ( log4j_props is not None ):
+        cmdline += " --driver-java-options -Dlog4j.configuration=file:"+log4j_props
+    cmdline += " "+" ".join(spark_args)
+    os.system(cmdline)
+    print("Job end.")
+else:
+    #No job declared, just leave the Spark cluster started to allow connexion from any submitted job.
+    #It will be stopped upon a qdel or when wall time is reached
+    print("Waiting indefinitly until cluster is stopped")
+    while True:
+        print("Spark cluster is still alive with master" + spark_master)
+        time.sleep(60)
+
+print("\nPBS Spark Launcher End")
+
