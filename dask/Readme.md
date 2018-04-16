@@ -40,7 +40,7 @@ Following script can be use to start a Dask cluster :
 #Environment sourcing
 export PYTHONHOME=/work/logiciels/rh7/Python/3.5.2
 export PATH=$PYTHONHOME/bin:$PATH
-export LD_LIBRARY_PATH=$PYTHONHOME/lib:$LD_LIBRARY_PAT
+export LD_LIBRARY_PATH=$PYTHONHOME/lib:$LD_LIBRARY_PATH
 export PKG_CONFIG_PATH=$PYTHONHOME/lib/pkgconfig
 ENV_SOURCE="source ~/.bashrc; export PYTHONHOME=$PYTHONHOME; export PATH=$PYTHONHOME/bin:$PATH; export LD_LIBRARY_PATH=$PYTHONHOME/lib:$LD_LIBRARY_PATH; export PKG_CONFIG_PATH=$PYTHONHOME/lib/pkgconfig:$PKG_CONFIG_PATH"
 rm -f $PBS_O_WORKDIR/scheduler.json
@@ -112,7 +112,7 @@ Once dask code is OK, just use the same script for starting a cluster but with a
 #Environment sourcing
 export PYTHONHOME=/work/logiciels/rh7/Python/3.5.2
 export PATH=$PYTHONHOME/bin:$PATH
-export LD_LIBRARY_PATH=$PYTHONHOME/lib:$LD_LIBRARY_PAT
+export LD_LIBRARY_PATH=$PYTHONHOME/lib:$LD_LIBRARY_PATH
 export PKG_CONFIG_PATH=$PYTHONHOME/lib/pkgconfig
 ENV_SOURCE="source ~/.bashrc; export PYTHONHOME=$PYTHONHOME; export PATH=$PYTHONHOME/bin:$PATH; export LD_LIBRARY_PATH=$PYTHONHOME/lib:$LD_LIBRARY_PATH; export PKG_CONFIG_PATH=$PYTHONHOME/lib/pkgconfig:$PKG_CONFIG_PATH"
 rm -f $PBS_O_WORKDIR/scheduler.json
